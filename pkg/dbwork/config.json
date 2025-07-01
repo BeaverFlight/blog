@@ -1,0 +1,8 @@
+
+{
+	"host": "localhost",
+	"user": "postgres",
+	"password": "postgres",
+	"dbname": "blog",
+	"sslmode": "disable"
+}
