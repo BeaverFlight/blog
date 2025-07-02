@@ -1,5 +1,7 @@
 package models
 
+import "github.com/golang-jwt/jwt/v5"
+
 // Article представляет контентную публикацию
 // swagger:model article
 type Article struct {
@@ -54,4 +56,9 @@ type Request struct {
 	// Учётные данные пользователя
 	// required: true
 	User User `json:"user"`
+}
+
+type Claims struct {
+	Login string `json:"login"`
+	jwt.RegisteredClaims
 }

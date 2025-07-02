@@ -213,7 +213,7 @@ func (postgres *PostgresDataBase) VerifyArticleToUser(id int, login string) (boo
 }
 
 func (postgres *PostgresDataBase) GetArticle(id int) (models.Article, error) {
-	getArticleQuery := `SELECT * FROM articles WHERE id=$1`
+	getArticleQuery := `SELECT articles.id, articles.text, users.login  FROM articles, users WHERE articles.id=$1 AND articles.user_id=users.id`
 	article := models.Article{}
 
 	rows, err := postgres.db.Query(getArticleQuery, id)
@@ -223,15 +223,10 @@ func (postgres *PostgresDataBase) GetArticle(id int) (models.Article, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		err = rows.Scan(&article.ID, &article.UserID, &article.Text)
+		err = rows.Scan(&article.ID, &article.Text, &article.Author)
 		if err != nil {
 			return article, err
 		}
-		name, err := postgres.getUserName(article.UserID)
-		if err != nil {
-			return article, err
-		}
-		article.Author = name
 	}
 	return article, nil
 }

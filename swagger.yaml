@@ -1,4 +1,16 @@
 definitions:
+    APIError:
+        description: Стандартная ошибка API
+        properties:
+            code:
+                format: int64
+                type: integer
+                x-go-name: Code
+            message:
+                type: string
+                x-go-name: Message
+        type: object
+        x-go-package: blog/pkg/handlers
     article:
         description: Article представляет контентную публикацию
         properties:
@@ -119,20 +131,21 @@ paths:
             tags:
                 - article
         put:
-            description: '# Требует аутентификации и проверки владельца статьи'
+            description: |-
+                Обновление существующей статьи
+                Требует аутентификации и проверки владельца статьи
             operationId: updateArticle
             responses:
                 "200":
-                    description: Статья успешно обновлена
+                    description: ' Статья успешно обновлена'
                 "400":
-                    description: Неверный формат запроса
+                    description: ' Неверный формат запроса'
                 "401":
-                    description: Неавторизованный доступ
+                    description: ' Неавторизованный доступ'
                 "403":
-                    description: Запрещено (не владелец статьи)
+                    description: ' Запрещено (не владелец статьи)'
                 "500":
-                    description: Ошибка сервера
-            summary: Обновление статьи
+                    description: ' Ошибка сервера'
             tags:
                 - article
     /article/{id}:
@@ -167,6 +180,21 @@ paths:
             summary: Получение статьи по ID
             tags:
                 - article
+    /login:
+        post:
+            description: Аутентификация пользователя и получение JWT токена
+            operationId: login
+            responses:
+                "200":
+                    description: ' Успешная аутентификация'
+                "400":
+                    description: ' Неверный формат запроса'
+                "401":
+                    description: ' Неверные учетные данные'
+                "500":
+                    description: ' Ошибка сервера'
+            tags:
+                - user
     /register:
         post:
             operationId: register
@@ -193,4 +221,12 @@ responses:
             items:
                 $ref: '#/definitions/article'
             type: array
+    jwtToken:
+        description: Генерация JWT токена
+        schema:
+            properties:
+                token:
+                    type: string
+                    x-go-name: Token
+            type: object
 swagger: "2.0"

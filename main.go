@@ -1,9 +1,12 @@
 package main
 
 import (
+	"blog/pkg/auth"
 	"blog/pkg/handlers"
+	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
@@ -26,21 +29,32 @@ func enableCORS(router *mux.Router) {
 }
 
 func main() {
+	configFile, err := os.ReadFile("JWTSecret.json")
+	var config struct {
+		JWTSecret string `json:"jwt_secret"`
+	}
+
+	json.Unmarshal(configFile, &config)
 	router := mux.NewRouter()
 	enableCORS(router)
 
-	err := handlers.StartDB()
+	err = handlers.StartDB()
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	router.HandleFunc("/article", handlers.CreateArticle).Methods("POST")
-	router.HandleFunc("/article/{id}", handlers.GetArticle).Methods("GET")
-	router.HandleFunc("/article/{id}", handlers.DeleteArticle).Methods("DELETE")
-	router.HandleFunc("/article", handlers.UpdateArticle).Methods("PUT")
+	router.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
 	router.HandleFunc("/register", handlers.Register).Methods("POST")
+	router.HandleFunc("/article/{id}", handlers.GetArticle).Methods("GET")
 	router.HandleFunc("/article", handlers.GetAllArticle).Methods("GET")
 
+	// Protected routes
+	protected := router.PathPrefix("").Subrouter()
+	protected.Use(auth.AuthMiddleware(config.JWTSecret))
+
+	protected.HandleFunc("/article", handlers.CreateArticle).Methods("POST")
+	protected.HandleFunc("/article/{id}", handlers.DeleteArticle).Methods("DELETE")
+	protected.HandleFunc("/article", handlers.UpdateArticle).Methods("PUT")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
