@@ -47,7 +47,13 @@ func CreateArticle(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if verify {
-		DB.CreateArticle(request.User.Login, request.Article.Text)
+		ch := make(chan error, 1)
+		DB.CreateArticle(request.User.Login, request.Article.Text, ch)
+		err := <-ch
+		if err != nil {
+			http.Error(rw, "Ошибка создания записи", http.StatusInternalServerError)
+			return
+		}
 		rw.WriteHeader(http.StatusCreated)
 		return
 	}
@@ -92,7 +98,13 @@ func DeleteArticle(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if verify && ok {
-		DB.DeleteArticle(id)
+		ch := make(chan error, 1)
+		DB.DeleteArticle(id, ch)
+		err = <-ch
+		if err != nil {
+			http.Error(rw, "Ошибка удаления записи", http.StatusInternalServerError)
+			return
+		}
 		rw.WriteHeader(http.StatusCreated)
 		return
 	}
@@ -116,8 +128,13 @@ func Register(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	DB.CreateUser(request.User.Login, request.User.Password)
+	ch := make(chan error, 1)
+	DB.CreateUser(request.User.Login, request.User.Password, ch)
+	err = <-ch
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	rw.WriteHeader(http.StatusCreated)
 }
 
@@ -189,7 +206,13 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if verify && ok {
-		DB.UpdateArticle(request.Article.ID, request.Article.Text)
+		ch := make(chan error, 1)
+		DB.UpdateArticle(request.Article.ID, request.Article.Text, ch)
+		err = <-ch
+		if err != nil {
+			http.Error(rw, "Ошибка обновления записи", http.StatusInternalServerError)
+			return
+		}
 		rw.WriteHeader(http.StatusCreated)
 		return
 	}

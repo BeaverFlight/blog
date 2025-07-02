@@ -2,23 +2,22 @@ package dbwork
 
 import (
 	"blog/pkg/models"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type DataBase interface {
-	DeleteArticle(id int)
-	CreateArticle(author, text string)
+	DeleteArticle(id int, ch chan error)
+	CreateArticle(author, text string, ch chan error)
 	GetArticle(id int) (models.Article, error)
-	UpdateArticle(id int, text string)
-	CreateUser(login, password string)
+	UpdateArticle(id int, text string, ch chan error)
+	CreateUser(login, password string, ch chan error)
 	GetAllArticle() ([]models.Article, error)
 	VerifyPassword(login, password string) (bool, error)
 	VerifyArticleToUser(id int, login string) (bool, error)
@@ -38,6 +37,7 @@ type event struct {
 	text      string
 	login     string
 	password  string
+	error     chan error
 }
 
 type eventType byte
@@ -156,17 +156,18 @@ func (postgres *PostgresDataBase) createTable(createQuery string) error {
 	return nil
 }
 
-func (postgres *PostgresDataBase) DeleteArticle(id int) {
-	postgres.events <- event{eventType: eventDelete, id: id}
+func (postgres *PostgresDataBase) DeleteArticle(id int, ch chan error) {
+	postgres.events <- event{eventType: eventDelete, id: id, error: ch}
 }
 
-func (postgres *PostgresDataBase) CreateArticle(author, text string) {
+func (postgres *PostgresDataBase) CreateArticle(author, text string, ch chan error) {
 	id, err := postgres.getUserID(author)
 	if err != nil {
+		ch <- err
 		log.Println(err)
 		return
 	}
-	postgres.events <- event{eventType: eventCreate, userID: id, text: text}
+	postgres.events <- event{eventType: eventCreate, userID: id, text: text, error: ch}
 }
 
 func (postgres *PostgresDataBase) getUserID(login string) (int, error) {
@@ -269,12 +270,12 @@ func (postgres *PostgresDataBase) getUserName(id int) (string, error) {
 	return name, err
 }
 
-func (postgres *PostgresDataBase) UpdateArticle(id int, text string) {
-	postgres.events <- event{eventType: eventUpdate, id: id, text: text}
+func (postgres *PostgresDataBase) UpdateArticle(id int, text string, ch chan error) {
+	postgres.events <- event{eventType: eventUpdate, id: id, text: text, error: ch}
 }
 
-func (postgres *PostgresDataBase) CreateUser(login, password string) {
-	postgres.events <- event{eventType: eventCreateUser, login: login, password: password}
+func (postgres *PostgresDataBase) CreateUser(login, password string, ch chan error) {
+	postgres.events <- event{eventType: eventCreateUser, login: login, password: password, error: ch}
 }
 
 func (postgres *PostgresDataBase) Run() {
@@ -288,22 +289,30 @@ func (postgres *PostgresDataBase) Run() {
 				if err != nil {
 					log.Println(err)
 				}
+				event.error <- err
+				close(event.error)
 			case eventCreate:
 				err := postgres.createArticleInDB(event.userID, event.text)
 				if err != nil {
 					log.Println(err)
 				}
+				event.error <- err
+				close(event.error)
 
 			case eventUpdate:
 				err := postgres.updateArticleInDB(event.id, event.text)
 				if err != nil {
 					log.Println(err)
 				}
+				event.error <- err
+				close(event.error)
 			case eventCreateUser:
 				err := postgres.createUserInDB(event.login, event.password)
 				if err != nil {
 					log.Println(err)
 				}
+				event.error <- err
+				close(event.error)
 			}
 		}
 	}()
@@ -344,10 +353,18 @@ func (postgres *PostgresDataBase) createUserInDB(login, password string) error {
 	createUserQuery := `INSERT INTO users
                      (login, password)
                      VALUES($1, $2);`
-	hashPassword := sha256.Sum256([]byte(password))
-	hexPassword := hex.EncodeToString(hashPassword[:])
-	log.Println(hexPassword)
-	_, err := postgres.db.Exec(createUserQuery, login, hexPassword)
+	id, err := postgres.getUserID(login)
+	if err != nil {
+		return err
+	}
+	if id != -1 {
+		return fmt.Errorf("Аккаунт с таким логином уже существует")
+	}
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = postgres.db.Exec(createUserQuery, login, hashPassword)
 	if err != nil {
 		return err
 	}
@@ -355,9 +372,6 @@ func (postgres *PostgresDataBase) createUserInDB(login, password string) error {
 }
 
 func (postgres *PostgresDataBase) VerifyPassword(login, password string) (bool, error) {
-	hashPassword := sha256.Sum256([]byte(password))
-	hexPassword := hex.EncodeToString(hashPassword[:])
-
 	getUserQuery := `SELECT password FROM users WHERE login=$1`
 
 	rows, err := postgres.db.Query(getUserQuery, login)
@@ -366,7 +380,7 @@ func (postgres *PostgresDataBase) VerifyPassword(login, password string) (bool, 
 	}
 	defer rows.Close()
 
-	var realPassword string
+	var realPassword []byte
 
 	for rows.Next() {
 		err = rows.Scan(&realPassword)
@@ -375,8 +389,7 @@ func (postgres *PostgresDataBase) VerifyPassword(login, password string) (bool, 
 		}
 	}
 
-	if realPassword == hexPassword {
-		return true, nil
-	}
-	return false, nil
+	err = bcrypt.CompareHashAndPassword(realPassword, []byte(password))
+
+	return err == nil, nil
 }
