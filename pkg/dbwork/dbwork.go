@@ -12,6 +12,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Интерфейс для работы с БД
+// swagger:name DataBase
 type DataBase interface {
 	DeleteArticle(id int, ch chan error)
 	CreateArticle(author, text string, ch chan error)
@@ -50,6 +52,8 @@ const (
 	eventCreateUser
 )
 
+// Параметры подключения к БД
+// swagger:model
 type postgresDBParams struct {
 	DBName   string `json:"dbName"`
 	Host     string `json:"host"`

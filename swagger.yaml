@@ -1,0 +1,196 @@
+definitions:
+    article:
+        description: Article представляет контентную публикацию
+        properties:
+            author:
+                description: Отображаемое имя автора
+                example: Иван Иванов
+                type: string
+                x-go-name: Author
+            id:
+                description: Уникальный идентификатор статьи
+                example: 1
+                format: int64
+                type: integer
+                x-go-name: ID
+            text:
+                description: Основное содержимое статьи
+                example: Текст статьи...
+                type: string
+                x-go-name: Text
+            user_id:
+                description: ID пользователя-владельца статьи
+                example: 5
+                format: int64
+                type: integer
+                x-go-name: UserID
+        required:
+            - id
+            - author
+            - user_id
+            - text
+        type: object
+        x-go-name: Article
+        x-go-package: blog/pkg/models
+    postgresDBParams:
+        description: Параметры подключения к БД
+        properties:
+            dbName:
+                type: string
+                x-go-name: DBName
+            host:
+                type: string
+                x-go-name: Host
+            password:
+                type: string
+                x-go-name: Password
+            sslmode:
+                type: string
+                x-go-name: SslMode
+            user:
+                type: string
+                x-go-name: User
+        type: object
+        x-go-package: blog/pkg/dbwork
+    request:
+        description: Request представляет составной входной объект
+        properties:
+            article:
+                $ref: '#/definitions/article'
+            user:
+                $ref: '#/definitions/user'
+        required:
+            - article
+            - user
+        type: object
+        x-go-name: Request
+        x-go-package: blog/pkg/models
+    user:
+        description: User представляет учётную запись пользователя
+        properties:
+            id:
+                description: Уникальный идентификатор пользователя
+                example: 5
+                format: int64
+                type: integer
+                x-go-name: ID
+            login:
+                description: Логин для аутентификации
+                example: user123
+                type: string
+                x-go-name: Login
+            password:
+                description: Пароль учётной записи
+                format: password
+                type: string
+                x-go-name: Password
+        required:
+            - id
+            - login
+            - password
+        type: object
+        x-go-name: User
+        x-go-package: blog/pkg/models
+paths:
+    /article:
+        get:
+            operationId: getAllArticles
+            responses:
+                "200":
+                    $ref: '#/responses/articlesResponse'
+                "500":
+                    description: Ошибка сервера
+            summary: Получение всех статей
+            tags:
+                - article
+        post:
+            description: '# Требует аутентификации пользователя'
+            operationId: createArticle
+            responses:
+                "201":
+                    description: Статья успешно создана
+                "400":
+                    description: Неверный формат запроса
+                "401":
+                    description: Неавторизованный доступ
+                "500":
+                    description: Ошибка сервера
+            summary: Создание новой статьи
+            tags:
+                - article
+        put:
+            description: '# Требует аутентификации и проверки владельца статьи'
+            operationId: updateArticle
+            responses:
+                "200":
+                    description: Статья успешно обновлена
+                "400":
+                    description: Неверный формат запроса
+                "401":
+                    description: Неавторизованный доступ
+                "403":
+                    description: Запрещено (не владелец статьи)
+                "500":
+                    description: Ошибка сервера
+            summary: Обновление статьи
+            tags:
+                - article
+    /article/{id}:
+        delete:
+            description: '# Требует аутентификации и проверки владельца статьи'
+            operationId: deleteArticle
+            responses:
+                "200":
+                    description: Статья успешно удалена
+                "400":
+                    description: Неверный ID статьи
+                "401":
+                    description: Неавторизованный доступ
+                "403":
+                    description: Запрещено (не владелец статьи)
+                "500":
+                    description: Ошибка сервера
+            summary: Удаление статьи
+            tags:
+                - article
+        get:
+            operationId: getArticle
+            responses:
+                "200":
+                    $ref: '#/responses/articleResponse'
+                "400":
+                    description: Неверный ID статьи
+                "404":
+                    description: Статья не найдена
+                "500":
+                    description: Ошибка сервера
+            summary: Получение статьи по ID
+            tags:
+                - article
+    /register:
+        post:
+            operationId: register
+            responses:
+                "201":
+                    description: Пользователь успешно зарегистрирован
+                "400":
+                    description: Неверный формат запроса
+                "409":
+                    description: Пользователь уже существует
+                "500":
+                    description: Ошибка сервера
+            summary: Регистрация нового пользователя
+            tags:
+                - user
+responses:
+    articleResponse:
+        description: ""
+        schema:
+            $ref: '#/definitions/article'
+    articlesResponse:
+        description: ""
+        schema:
+            items:
+                $ref: '#/definitions/article'
+            type: array
+swagger: "2.0"
