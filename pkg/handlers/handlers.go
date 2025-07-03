@@ -82,6 +82,7 @@ func CreateArticle(rw http.ResponseWriter, r *http.Request) {
 	err = <-ch
 	if err != nil {
 		http.Error(rw, "Ошибка создания записи", http.StatusInternalServerError)
+		return
 	}
 	rw.WriteHeader(http.StatusCreated)
 }
