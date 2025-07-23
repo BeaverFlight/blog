@@ -3,7 +3,6 @@ package auth
 import (
 	"blog/pkg/models"
 	"context"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -25,7 +24,6 @@ func GenerateJWT(login string, secret string, expiration time.Duration) (string,
 	return token.SignedString([]byte(secret))
 }
 
-// Генерация JWT токена
 // swagger:response jwtToken
 type JWTResponse struct {
 	// in:body
@@ -39,12 +37,12 @@ func AuthMiddleware(secret string) mux.MiddlewareFunc {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(rw, "Authorization header required", http.StatusUnauthorized)
+				models.ResponseBadRequest(rw)
 				return
 			}
 			tokenParts := strings.Split(authHeader, " ")
 			if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-				http.Error(rw, "Invalid token format", http.StatusUnauthorized)
+				models.ResponseBadRequest(rw)
 				return
 			}
 
@@ -58,10 +56,9 @@ func AuthMiddleware(secret string) mux.MiddlewareFunc {
 					return []byte(secret), nil
 				},
 			)
-			log.Println(token)
 
 			if err != nil || !token.Valid {
-				http.Error(rw, "Invalid token", http.StatusUnauthorized)
+				models.ResponseUnauthorized(rw)
 				return
 			}
 			// Добавляем логин в контекст
@@ -71,8 +68,7 @@ func AuthMiddleware(secret string) mux.MiddlewareFunc {
 	}
 }
 
-// Middleware аутентификации
-// swagger:parameters protectedOperation
+// swagger:parameters createArticle updateArticle deleteArticle
 type AuthHeader struct {
 	// Bearer токен
 	// in: header
