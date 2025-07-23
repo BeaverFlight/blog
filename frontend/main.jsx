@@ -228,7 +228,7 @@ function App() {
             <div className="nav-links">
               {user ? (
                 <>
-                  <span>Привет, {user.login}!</span>
+                  <span>Привет, {user.login}</span>
                   <a href="#" onClick={() => setPage('articles')}>Статьи</a>
                   <a href="#" onClick={handleLogout}>Выйти</a>
                 </>
