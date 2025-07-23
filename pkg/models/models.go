@@ -1,7 +1,6 @@
 package models
 
 import (
-	"blog/pkg/models"
 	"encoding/json"
 	"net/http"
 
@@ -77,49 +76,49 @@ type Response struct {
 }
 
 func ResponseUnauthorized(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusUnauthorized,
 		Message: "Вы не авторизованы",
 	})
 }
 
 func ResponseErrorServer(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusInternalServerError,
 		Message: "Неизвестная ошибка сервера",
 	})
 }
 
 func ResponseBadRequest(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusBadRequest,
 		Message: "Ошибка запроса",
 	})
 }
 
 func ResponseCreated(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusCreated,
 		Message: "Объект создан",
 	})
 }
 
 func ResponseNotFound(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusNotFound,
 		Message: "Страница не найдена",
 	})
 }
 
 func ResponseOK(rw http.ResponseWriter) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    http.StatusOK,
 		Message: "Запрос выполнен",
 	})
 }
 
 func ResponseNew(rw http.ResponseWriter, message string, code int) {
-	json.NewEncoder(rw).Encode(models.Response{
+	json.NewEncoder(rw).Encode(Response{
 		Code:    code,
 		Message: message,
 	})
