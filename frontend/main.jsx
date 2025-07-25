@@ -4,8 +4,7 @@ import axios from 'axios';
 
 // Настройка axios
 const api = axios.create({
-  baseURL: import.meta.env.PROD ? 'http://localhost:8080' : '/api',
-  withCredentials: true
+  baseURL: '/api'
 });
 
 api.interceptors.request.use(config => {

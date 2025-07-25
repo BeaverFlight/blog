@@ -4,14 +4,69 @@ import (
 	"blog/pkg/auth"
 	"blog/pkg/dbwork"
 	"blog/pkg/models"
+	"bytes"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 )
+
+var logger = log.New(os.Stdout, "[HTTP] ", log.LstdFlags|log.Lshortfile)
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		logger.Printf("Incoming %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+		headers := make(map[string]string)
+		for k, v := range r.Header {
+			if k != "Authorization" {
+				headers[k] = strings.Join(v, ", ")
+			}
+		}
+		logger.Printf("Headers: %+v", headers)
+
+		var bodyBytes []byte
+		if r.Body != nil && r.URL.Path != "/login" && r.URL.Path != "/register" {
+			bodyBytes, _ = io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			if len(bodyBytes) > 0 {
+				maxBodySize := 1024
+				if len(bodyBytes) > maxBodySize {
+					logger.Printf("Body (truncated): %s", string(bodyBytes[:maxBodySize]))
+				} else {
+					logger.Printf("Body: %s", string(bodyBytes))
+				}
+			}
+		}
+
+		lrw := &loggingResponseWriter{ResponseWriter: rw}
+
+		next.ServeHTTP(lrw, r)
+
+		duration := time.Since(start)
+		logger.Printf("Completed %s %s | Status: %d | Duration: %v",
+			r.Method, r.URL.Path, lrw.status, duration)
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.status = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
 
 // Стандартная ошибка API
 // swagger:model
@@ -38,6 +93,7 @@ type APIError struct {
 //     schema:
 //     $ref: "#/definitions/Article"
 func CreateArticle(rw http.ResponseWriter, r *http.Request) {
+	logger.Printf("CreateArticle started")
 	login, ok := r.Context().Value("login").(string)
 	if !ok {
 		models.ResponseUnauthorized(rw)
@@ -101,7 +157,7 @@ func DeleteArticle(rw http.ResponseWriter, r *http.Request) {
 		models.ResponseBadRequest(rw)
 		return
 	}
-
+	logger.Printf("DeleteArticle started for ID: %s", strId)
 	ok, err = dbwork.DB.VerifyArticleToUser(id, login)
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -153,7 +209,7 @@ func Register(rw http.ResponseWriter, r *http.Request) {
 		models.ResponseBadRequest(rw)
 		return
 	}
-
+	logger.Printf("Register started for user: %s", user.Login)
 	if len(user.Login) < 5 || len(user.Password) < 8 {
 		models.ResponseNew(
 			rw,
@@ -204,7 +260,7 @@ func GetArticle(rw http.ResponseWriter, r *http.Request) {
 		models.ResponseNotFound(rw)
 		return
 	}
-
+	logger.Printf("GetArticle started for ID: %s", strId)
 	articles, err := dbwork.DB.GetArticle(id)
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -234,6 +290,7 @@ type ArticleResponse struct {
 //	200: articlesResponse
 //	500: Response
 func GetAllArticle(rw http.ResponseWriter, r *http.Request) {
+	logger.Printf("GetAllArticle started")
 	article, err := dbwork.DB.GetAllArticle()
 	if err != nil {
 		models.ResponseNotFound(rw)
@@ -294,7 +351,7 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 		models.ResponseBadRequest(rw)
 		return
 	}
-
+	logger.Printf("UpdateArticle started for ID: %d", article.ID)
 	ok, err = dbwork.DB.VerifyArticleToUser(article.ID, login)
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -346,7 +403,7 @@ func LoginHandler(rw http.ResponseWriter, r *http.Request) {
 		models.ResponseBadRequest(rw)
 		return
 	}
-
+	logger.Printf("Login attempt for: %s", loginRequest.Login)
 	verify, err := dbwork.DB.VerifyPassword(loginRequest.Login, loginRequest.Password)
 	if err != nil || !verify {
 		models.ResponseNew(rw, "Не верны пароль или логин", http.StatusUnauthorized)

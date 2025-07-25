@@ -32,6 +32,8 @@ func enableCORS(router *mux.Router) {
 
 func main() {
 	router := mux.NewRouter()
+
+	router.Use(handlers.LoggingMiddleware)
 	enableCORS(router)
 
 	router.HandleFunc("/login", handlers.LoginHandler).Methods("POST")

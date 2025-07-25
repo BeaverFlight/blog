@@ -71,7 +71,6 @@ func AuthMiddleware() mux.MiddlewareFunc {
 				models.ResponseUnauthorized(rw)
 				return
 			}
-			// Добавляем логин в контекст
 			ctx := context.WithValue(r.Context(), "login", claims.Login)
 			next.ServeHTTP(rw, r.WithContext(ctx))
 		})
