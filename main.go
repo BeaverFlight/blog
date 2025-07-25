@@ -2,11 +2,12 @@ package main
 
 import (
 	"blog/pkg/auth"
+	"blog/pkg/dbwork"
 	"blog/pkg/handlers"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -14,7 +15,7 @@ import (
 func enableCORS(router *mux.Router) {
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+			w.Header().Set("Access-Control-Allow-Origin", "*") // Разрешить все домены
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -30,20 +31,8 @@ func enableCORS(router *mux.Router) {
 }
 
 func main() {
-	configFile, err := os.ReadFile("JWTSecret.json")
-	var config struct {
-		JWTSecret string `json:"jwt_secret"`
-	}
-
-	json.Unmarshal(configFile, &config)
 	router := mux.NewRouter()
 	enableCORS(router)
-
-	err = handlers.StartDB()
-	if err != nil {
-		log.Println(err)
-		return
-	}
 
 	router.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
 	router.HandleFunc("/register", handlers.Register).Methods("POST")
@@ -52,10 +41,37 @@ func main() {
 
 	// Protected routes
 	protected := router.PathPrefix("").Subrouter()
-	protected.Use(auth.AuthMiddleware(config.JWTSecret))
+	protected.Use(auth.AuthMiddleware())
 
 	protected.HandleFunc("/article", handlers.CreateArticle).Methods("POST")
 	protected.HandleFunc("/article/{id}", handlers.DeleteArticle).Methods("DELETE")
 	protected.HandleFunc("/article", handlers.UpdateArticle).Methods("PUT")
 	log.Fatal(http.ListenAndServe(":8080", router))
+}
+
+func init() {
+	port, err := strconv.Atoi(os.Getenv("PORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	configDB := dbwork.PostgresDBParams{
+		User:     os.Getenv("USER"),
+		Password: os.Getenv("PASSWORD"),
+		Host:     os.Getenv("HOST"),
+		Port:     port,
+		SSLMode:  os.Getenv("SSLMODE"),
+		DBName:   os.Getenv("DBNAME"),
+	}
+
+	err = dbwork.InitializationDB(configDB)
+	if err != nil {
+		log.Fatal(err)
+	}
+	hours, err := strconv.Atoi(os.Getenv("JWT_EXPIRATION_HOURS"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth.InitializationSecret(os.Getenv("JWT_SECRET"), hours)
 }

@@ -3,7 +3,6 @@ package auth
 import (
 	"blog/pkg/models"
 	"context"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -12,7 +11,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func GenerateJWT(login string, secret string, expiration time.Duration) (string, error) {
+var (
+	secret     string
+	expiration time.Duration
+)
+
+func InitializationSecret(newSecret string, hour int) {
+	secret = newSecret
+	expiration = time.Duration(hour) * time.Hour
+}
+
+func GenerateJWT(login string) (string, error) {
 	claims := &models.Claims{
 		Login: login,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -25,7 +34,6 @@ func GenerateJWT(login string, secret string, expiration time.Duration) (string,
 	return token.SignedString([]byte(secret))
 }
 
-// Генерация JWT токена
 // swagger:response jwtToken
 type JWTResponse struct {
 	// in:body
@@ -34,17 +42,17 @@ type JWTResponse struct {
 	}
 }
 
-func AuthMiddleware(secret string) mux.MiddlewareFunc {
+func AuthMiddleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(rw, "Authorization header required", http.StatusUnauthorized)
+				models.ResponseBadRequest(rw)
 				return
 			}
 			tokenParts := strings.Split(authHeader, " ")
 			if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-				http.Error(rw, "Invalid token format", http.StatusUnauthorized)
+				models.ResponseBadRequest(rw)
 				return
 			}
 
@@ -58,10 +66,9 @@ func AuthMiddleware(secret string) mux.MiddlewareFunc {
 					return []byte(secret), nil
 				},
 			)
-			log.Println(token)
 
 			if err != nil || !token.Valid {
-				http.Error(rw, "Invalid token", http.StatusUnauthorized)
+				models.ResponseUnauthorized(rw)
 				return
 			}
 			// Добавляем логин в контекст
@@ -71,8 +78,7 @@ func AuthMiddleware(secret string) mux.MiddlewareFunc {
 	}
 }
 
-// Middleware аутентификации
-// swagger:parameters protectedOperation
+// swagger:parameters createArticle updateArticle deleteArticle
 type AuthHeader struct {
 	// Bearer токен
 	// in: header

@@ -8,26 +8,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/mux"
 )
-
-var DB dbwork.DataBase
-
-func StartDB() error {
-	var err error
-
-	DB, err = dbwork.InitializationDB()
-	if err != nil {
-		return err
-	}
-
-	DB.Run()
-	return nil
-}
 
 // Стандартная ошибка API
 // swagger:model
@@ -36,36 +20,34 @@ type APIError struct {
 	Message string `json:"message"`
 }
 
-// swagger:route POST /article article createArticle
-//
 // # Создание новой статьи
 //
-// # Требует аутентификации пользователя
+// Требует аутентификации.
 //
 // responses:
 //
-//	201: description:Статья успешно создана
-//	400: description:Неверный формат запроса
-//	401: description:Неавторизованный доступ
-//	500: description:Ошибка сервера
+//	201: Response
+//	400: Response
+//	401: Response
+//	500: Response
 //
 // Параметры:
-//   - name: body
+//   - name: article
 //     in: body
 //     required: true
 //     schema:
-//     $ref: "#/definitions/Request"
+//     $ref: "#/definitions/Article"
 func CreateArticle(rw http.ResponseWriter, r *http.Request) {
 	login, ok := r.Context().Value("login").(string)
 	if !ok {
-		http.Error(rw, "Вы не авторизованы", http.StatusUnauthorized)
+		models.ResponseUnauthorized(rw)
 		return
 	}
 
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Println(err)
-		http.Error(rw, "Ошибка чтения запроса", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
@@ -73,114 +55,107 @@ func CreateArticle(rw http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(data, &article)
 	if err != nil {
 		log.Println(err)
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
 	ch := make(chan error, 1)
-	DB.CreateArticle(login, article.Text, ch)
+	dbwork.DB.CreateArticle(login, article.Text, ch)
 	err = <-ch
 	if err != nil {
-		http.Error(rw, "Ошибка создания записи", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
-	rw.WriteHeader(http.StatusCreated)
+	models.ResponseCreated(rw)
 }
 
 // swagger:route DELETE /article/{id} article deleteArticle
 //
 // # Удаление статьи
 //
-// # Требует аутентификации и проверки владельца статьи
+// Требует аутентификации и проверки владельца.
 //
 // responses:
 //
-//	200: description:Статья успешно удалена
-//	400: description:Неверный ID статьи
-//	401: description:Неавторизованный доступ
-//	403: description:Запрещено (не владелец статьи)
-//	500: description:Ошибка сервера
+//	200: Response
+//	400: Response
+//	401: Response
+//	403: Response
+//	500: Response
 //
 // Параметры:
 //   - name: id
 //     in: path
-//     description: ID статьи
 //     required: true
 //     type: integer
-//     format: int64
-//   - name: body
-//     in: body
-//     required: true
-//     schema:
-//     $ref: "#/definitions/Request"
 func DeleteArticle(rw http.ResponseWriter, r *http.Request) {
 	login, ok := r.Context().Value("login").(string)
 	if !ok {
-		http.Error(rw, "Вы не авторизованы", http.StatusUnauthorized)
+		models.ResponseUnauthorized(rw)
 		return
 	}
 	vars := mux.Vars(r)
 	strId := vars["id"]
 	id, err := strconv.Atoi(strId)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
-	ok, err = DB.VerifyArticleToUser(id, login)
+	ok, err = dbwork.DB.VerifyArticleToUser(id, login)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
 	if !ok {
-		http.Error(rw, "Вы не можете изменять не свои записи", http.StatusBadRequest)
+		models.ResponseNew(rw, "Вы не можете изменять не свои записи", http.StatusBadRequest)
 		return
 	}
 
 	ch := make(chan error, 1)
-	DB.DeleteArticle(id, ch)
+	dbwork.DB.DeleteArticle(id, ch)
 	err = <-ch
 	if err != nil {
-		http.Error(rw, "Ошибка удаления записи", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
-	rw.WriteHeader(http.StatusOK)
+	models.ResponseOK(rw)
 }
 
 // swagger:route POST /register user register
 //
-// # Регистрация нового пользователя
+// # Регистрация пользователя
 //
 // responses:
 //
-//	201: description:Пользователь успешно зарегистрирован
-//	400: description:Неверный формат запроса
-//	409: description:Пользователь уже существует
-//	500: description:Ошибка сервера
+//	201: Response
+//	400: Response
+//	409: Response
+//	500: Response
 //
 // Параметры:
-//   - name: body
+//   - name: user
 //     in: body
 //     required: true
 //     schema:
-//     $ref: "#/definitions/Request"
+//     $ref: "#/definitions/User"
 func Register(rw http.ResponseWriter, r *http.Request) {
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
 	user := models.User{}
 	err = json.Unmarshal(data, &user)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
 	if len(user.Login) < 5 || len(user.Password) < 8 {
-		http.Error(
+		models.ResponseNew(
 			rw,
 			"Логин не может быть короче 5 символов, а пароль короче 8 символов",
 			http.StatusBadRequest,
@@ -189,7 +164,7 @@ func Register(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(user.Login) >= 16 || len(user.Password) >= 20 {
-		http.Error(
+		models.ResponseNew(
 			rw,
 			"Логин не может быть длиннее 16 символов, а пороль длинее 20 символов",
 			http.StatusBadRequest,
@@ -198,52 +173,48 @@ func Register(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan error, 1)
-	DB.CreateUser(user.Login, user.Password, ch)
+	dbwork.DB.CreateUser(user.Login, user.Password, ch)
 	err = <-ch
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
-	rw.WriteHeader(http.StatusCreated)
+	models.ResponseCreated(rw)
 }
 
 // swagger:route GET /article/{id} article getArticle
-//
-// # Получение статьи по ID
-//
+// ...
+// responses:
+//   200: articleResponse
+//   400: Response
+//   404: Response
+//   500: Response
+
+// swagger:route GET /article article getAllArticles
+// ...
 // responses:
 //
-//	200: articleResponse
-//	400: description:Неверный ID статьи
-//	404: description:Статья не найдена
-//	500: description:Ошибка сервера
-//
-// Параметры:
-//   - name: id
-//     in: path
-//     description: ID статьи
-//     required: true
-//     type: integer
-//     format: int64
+//	200: articlesResponse
+//	500: Response
 func GetArticle(rw http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	strId := vars["id"]
 	id, err := strconv.Atoi(strId)
 	if err != nil {
-		http.Error(rw, "Данные не найдены", http.StatusNotFound)
+		models.ResponseNotFound(rw)
 		return
 	}
 
-	articles, err := DB.GetArticle(id)
+	articles, err := dbwork.DB.GetArticle(id)
 	if err != nil {
-		http.Error(rw, "Ошибка поиска данных", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
 	encoder := json.NewEncoder(rw)
 	err = encoder.Encode(articles)
 	if err != nil {
-		http.Error(rw, "Ошибка отправки данных", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 }
@@ -261,18 +232,18 @@ type ArticleResponse struct {
 // responses:
 //
 //	200: articlesResponse
-//	500: description:Ошибка сервера
+//	500: Response
 func GetAllArticle(rw http.ResponseWriter, r *http.Request) {
-	article, err := DB.GetAllArticle()
+	article, err := dbwork.DB.GetAllArticle()
 	if err != nil {
-		http.Error(rw, "Ошибка поиска данных", http.StatusInternalServerError)
+		models.ResponseNotFound(rw)
 		return
 	}
 
 	encoder := json.NewEncoder(rw)
 	err = encoder.Encode(article)
 	if err != nil {
-		http.Error(rw, "Ошибка отправки данных", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 }
@@ -284,18 +255,21 @@ type ArticlesResponse struct {
 }
 
 // swagger:route PUT /article article updateArticle
-// Обновление существующей статьи
-// Требует аутентификации и проверки владельца статьи
+//
+// # Обновление статьи
+//
+// Требует аутентификации и проверки владельца.
+//
 // responses:
 //
-//	200: description: Статья успешно обновлена
-//	400: description: Неверный формат запроса
-//	401: description: Неавторизованный доступ
-//	403: description: Запрещено (не владелец статьи)
-//	500: description: Ошибка сервера
+//	200: Response
+//	400: Response
+//	401: Response
+//	403: Response
+//	500: Response
 //
 // Параметры:
-//   - name: articleData
+//   - name: article
 //     in: body
 //     required: true
 //     schema:
@@ -303,13 +277,13 @@ type ArticlesResponse struct {
 func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 	login, ok := r.Context().Value("login").(string)
 	if !ok {
-		http.Error(rw, "Вы не авторизованы", http.StatusUnauthorized)
+		models.ResponseUnauthorized(rw)
 		return
 	}
 
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(rw, "Ошибка запроса к серверу", http.StatusInternalServerError)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
@@ -317,39 +291,41 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(data, &article)
 	if err != nil {
 		log.Println(err)
-		http.Error(rw, "Данные в запросе не найдены", http.StatusBadRequest)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
-	ok, err = DB.VerifyArticleToUser(article.ID, login)
+	ok, err = dbwork.DB.VerifyArticleToUser(article.ID, login)
 	if err != nil {
-		http.Error(rw, "Ошибка запроса", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
 	if !ok {
-		http.Error(rw, "Вы не можете изменять не свои записи.", http.StatusInternalServerError)
+		models.ResponseNew(rw, "Вы не можете изменять не свои записи.", http.StatusBadRequest)
 		return
 	}
 
 	ch := make(chan error, 1)
-	DB.UpdateArticle(article.ID, article.Text, ch)
+	dbwork.DB.UpdateArticle(article.ID, article.Text, ch)
 	err = <-ch
 	if err != nil {
-		http.Error(rw, "Ошибка обновления записи", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
-	rw.WriteHeader(http.StatusCreated)
+	models.ResponseOK(rw)
 }
 
 // swagger:route POST /login user login
-// Аутентификация пользователя и получение JWT токена
+//
+// # Аутентификация
+//
 // responses:
 //
-//	200: description: Успешная аутентификация
-//	400: description: Неверный формат запроса
-//	401: description: Неверные учетные данные
-//	500: description: Ошибка сервера
+//	200: jwtToken
+//	400: Response
+//	401: Response
+//	500: Response
 //
 // Параметры:
 //   - name: credentials
@@ -360,37 +336,28 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 func LoginHandler(rw http.ResponseWriter, r *http.Request) {
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(rw, "Ошибка запроса к серверу", http.StatusBadRequest)
+		models.ResponseErrorServer(rw)
 		return
 	}
 
 	loginRequest := models.User{}
 
 	if err := json.Unmarshal(data, &loginRequest); err != nil {
-		http.Error(rw, "Данные в запросе не найдены", http.StatusBadRequest)
+		models.ResponseBadRequest(rw)
 		return
 	}
 
-	verify, err := DB.VerifyPassword(loginRequest.Login, loginRequest.Password)
+	verify, err := dbwork.DB.VerifyPassword(loginRequest.Login, loginRequest.Password)
 	if err != nil || !verify {
-		http.Error(rw, "Не верны пароль или логин", http.StatusUnauthorized)
+		models.ResponseNew(rw, "Не верны пароль или логин", http.StatusUnauthorized)
 		return
 	}
-
-	configFile, _ := os.ReadFile("JWTSecret.json")
-	var config struct {
-		JWTSecret          string `json:"jwt_secret"`
-		JWTExpirationHours int    `json:"jwt_expiration_hours"`
-	}
-	json.Unmarshal(configFile, &config)
 
 	token, err := auth.GenerateJWT(
 		loginRequest.Login,
-		config.JWTSecret,
-		time.Duration(config.JWTExpirationHours)*time.Hour,
 	)
 	if err != nil {
-		http.Error(rw, "Ошибка генерации токена", http.StatusInternalServerError)
+		models.ResponseErrorServer(rw)
 		return
 	}
 

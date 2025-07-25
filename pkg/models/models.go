@@ -1,6 +1,11 @@
 package models
 
-import "github.com/golang-jwt/jwt/v5"
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/golang-jwt/jwt/v5"
+)
 
 // Article представляет контентную публикацию
 // swagger:model article
@@ -61,4 +66,60 @@ type Request struct {
 type Claims struct {
 	Login string `json:"login"`
 	jwt.RegisteredClaims
+}
+
+// Стандартный ответ API
+// swagger:model
+type Response struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func ResponseUnauthorized(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusUnauthorized,
+		Message: "Вы не авторизованы",
+	})
+}
+
+func ResponseErrorServer(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusInternalServerError,
+		Message: "Неизвестная ошибка сервера",
+	})
+}
+
+func ResponseBadRequest(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusBadRequest,
+		Message: "Ошибка запроса",
+	})
+}
+
+func ResponseCreated(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusCreated,
+		Message: "Объект создан",
+	})
+}
+
+func ResponseNotFound(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusNotFound,
+		Message: "Страница не найдена",
+	})
+}
+
+func ResponseOK(rw http.ResponseWriter) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    http.StatusOK,
+		Message: "Запрос выполнен",
+	})
+}
+
+func ResponseNew(rw http.ResponseWriter, message string, code int) {
+	json.NewEncoder(rw).Encode(Response{
+		Code:    code,
+		Message: message,
+	})
 }

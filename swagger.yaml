@@ -11,6 +11,18 @@ definitions:
                 x-go-name: Message
         type: object
         x-go-package: blog/pkg/handlers
+    Response:
+        description: Стандартный ответ API
+        properties:
+            code:
+                format: int64
+                type: integer
+                x-go-name: Code
+            message:
+                type: string
+                x-go-name: Message
+        type: object
+        x-go-package: blog/pkg/models
     article:
         description: Article представляет контентную публикацию
         properties:
@@ -111,58 +123,76 @@ paths:
                 "200":
                     $ref: '#/responses/articlesResponse'
                 "500":
-                    description: Ошибка сервера
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
             summary: Получение всех статей
             tags:
                 - article
-        post:
-            description: '# Требует аутентификации пользователя'
-            operationId: createArticle
-            responses:
-                "201":
-                    description: Статья успешно создана
-                "400":
-                    description: Неверный формат запроса
-                "401":
-                    description: Неавторизованный доступ
-                "500":
-                    description: Ошибка сервера
-            summary: Создание новой статьи
-            tags:
-                - article
         put:
-            description: |-
-                Обновление существующей статьи
-                Требует аутентификации и проверки владельца статьи
+            description: Требует аутентификации и проверки владельца.
             operationId: updateArticle
+            parameters:
+                - description: Bearer токен
+                  in: header
+                  name: Authorization
+                  required: true
+                  type: string
             responses:
                 "200":
-                    description: ' Статья успешно обновлена'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "400":
-                    description: ' Неверный формат запроса'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "401":
-                    description: ' Неавторизованный доступ'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "403":
-                    description: ' Запрещено (не владелец статьи)'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "500":
-                    description: ' Ошибка сервера'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
+            summary: Обновление статьи
             tags:
                 - article
     /article/{id}:
         delete:
-            description: '# Требует аутентификации и проверки владельца статьи'
+            description: Требует аутентификации и проверки владельца.
             operationId: deleteArticle
+            parameters:
+                - description: Bearer токен
+                  in: header
+                  name: Authorization
+                  required: true
+                  type: string
             responses:
                 "200":
-                    description: Статья успешно удалена
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "400":
-                    description: Неверный ID статьи
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "401":
-                    description: Неавторизованный доступ
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "403":
-                    description: Запрещено (не владелец статьи)
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "500":
-                    description: Ошибка сервера
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
             summary: Удаление статьи
             tags:
                 - article
@@ -172,27 +202,38 @@ paths:
                 "200":
                     $ref: '#/responses/articleResponse'
                 "400":
-                    description: Неверный ID статьи
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "404":
-                    description: Статья не найдена
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "500":
-                    description: Ошибка сервера
-            summary: Получение статьи по ID
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
             tags:
                 - article
     /login:
         post:
-            description: Аутентификация пользователя и получение JWT токена
             operationId: login
             responses:
                 "200":
-                    description: ' Успешная аутентификация'
+                    $ref: '#/responses/jwtToken'
                 "400":
-                    description: ' Неверный формат запроса'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "401":
-                    description: ' Неверные учетные данные'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "500":
-                    description: ' Ошибка сервера'
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
+            summary: Аутентификация
             tags:
                 - user
     /register:
@@ -200,14 +241,22 @@ paths:
             operationId: register
             responses:
                 "201":
-                    description: Пользователь успешно зарегистрирован
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "400":
-                    description: Неверный формат запроса
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "409":
-                    description: Пользователь уже существует
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
                 "500":
-                    description: Ошибка сервера
-            summary: Регистрация нового пользователя
+                    description: Response
+                    schema:
+                        $ref: '#/definitions/Response'
+            summary: Регистрация пользователя
             tags:
                 - user
 responses:
@@ -222,7 +271,7 @@ responses:
                 $ref: '#/definitions/article'
             type: array
     jwtToken:
-        description: Генерация JWT токена
+        description: ""
         schema:
             properties:
                 token:

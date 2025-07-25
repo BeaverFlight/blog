@@ -3,17 +3,23 @@ package dbwork
 import (
 	"blog/pkg/models"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // Интерфейс для работы с БД
 // swagger:name DataBase
+
+var DB DataBase
+
 type DataBase interface {
 	DeleteArticle(id int, ch chan error)
 	CreateArticle(author, text string, ch chan error)
@@ -54,107 +60,89 @@ const (
 
 // Параметры подключения к БД
 // swagger:model
-type postgresDBParams struct {
+type PostgresDBParams struct {
 	DBName   string `json:"dbName"`
 	Host     string `json:"host"`
 	User     string `json:"user"`
 	Password string `json:"password"`
-	SslMode  string `json:"sslmode"`
+	Port     int    `json:"port"`
+	SSLMode  string `json:"sslmode"`
 }
 
-func InitializationDB() (DataBase, error) {
-	configFile, err := os.ReadFile("pkg/dbwork/config.json")
-	if err != nil {
-		return nil, err
-	}
-
-	var config postgresDBParams
-
-	err = json.Unmarshal(configFile, &config)
-	if err != nil {
-		return nil, err
-	}
-
+func InitializationDB(config PostgresDBParams) error {
 	connStr := fmt.Sprintf(
-		"host=%s dbname=%s user=%s password=%s sslmode=%s",
-		config.Host,
-		config.DBName,
+		"postgres://%v:%v@%v:%v/%v?sslmode=%s",
 		config.User,
 		config.Password,
-		config.SslMode,
+		config.Host,
+		config.Port,
+		config.DBName,
+		config.SSLMode,
 	)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err = db.Ping(); err != nil {
-		return nil, err
+		return err
 	}
 
 	events := make(chan event, 16)
 
 	postgres := &PostgresDataBase{db: db, events: events}
 
-	err = postgres.verifyTableAndCreate()
-	if err != nil {
-		return nil, err
-	}
-
-	return postgres, nil
-}
-
-func (postgres *PostgresDataBase) verifyTableAndCreate() error {
-	exists, err := postgres.verifyTableExists("users")
-	if err != nil {
-		return err
-	}
-	if !exists {
-		createUsersQuery := `CREATE TABLE users(
-		id BIGSERIAL PRIMARY KEY,
-		login TEXT,
-		password VARCHAR
-		);`
-
-		postgres.createTable(createUsersQuery)
-	}
-
-	exists, err = postgres.verifyTableExists("articles")
-	if err != nil {
+	if err := postgres.runMigrations(); err != nil {
 		return err
 	}
 
-	if !exists {
-		createArticlesQuery := `CREATE TABLE articles(
-		id BIGSERIAL PRIMARY KEY,
-		user_id BIGINT,
-		text TEXT
-		);`
+	DB = postgres
 
-		postgres.createTable(createArticlesQuery)
-	}
 	return nil
 }
 
-func (postgres *PostgresDataBase) verifyTableExists(name string) (bool, error) {
-	var result string
-
-	rows, err := postgres.db.Query(fmt.Sprintf("SELECT to_regclass('public.%s');", name))
+func (postgre PostgresDataBase) runMigrations() error {
+	driver, err := postgres.WithInstance(postgre.db, &postgres.Config{})
 	if err != nil {
-		return false, err
+		return err
 	}
-	defer rows.Close()
 
-	for rows.Next() && result != name {
-		rows.Scan(&result)
-	}
-	return result == name, rows.Err()
-}
-
-func (postgres *PostgresDataBase) createTable(createQuery string) error {
-	_, err := postgres.db.Exec(createQuery)
+	wd, err := os.Getwd()
 	if err != nil {
+		return err
+	}
+
+	path := "file://" + filepath.Join(wd, "pkg/dbwork/migrations")
+
+	m, err := migrate.NewWithDatabaseInstance(
+		path,
+		"postgres", driver,
+	)
+	if err != nil {
+		return err
+	}
+
+	version, dirty, err := m.Version()
+	if err != nil && err != migrate.ErrNilVersion {
+		return err
+	}
+
+	if dirty {
+		if err := m.Force(int(version)); err != nil {
+			return err
+		}
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		if dirtyErr, ok := err.(migrate.ErrDirty); ok {
+			if err := m.Force(int(dirtyErr.Version)); err != nil {
+				return err
+			}
+			if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+				return err
+			}
+		}
 		return err
 	}
 	return nil
