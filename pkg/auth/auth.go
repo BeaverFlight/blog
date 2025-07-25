@@ -11,7 +11,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func GenerateJWT(login string, secret string, expiration time.Duration) (string, error) {
+var (
+	secret     string
+	expiration time.Duration
+)
+
+func InitializationSecret(newSecret string, hour int) {
+	secret = newSecret
+	expiration = time.Duration(hour) * time.Hour
+}
+
+func GenerateJWT(login string) (string, error) {
 	claims := &models.Claims{
 		Login: login,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -32,7 +42,7 @@ type JWTResponse struct {
 	}
 }
 
-func AuthMiddleware(secret string) mux.MiddlewareFunc {
+func AuthMiddleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")

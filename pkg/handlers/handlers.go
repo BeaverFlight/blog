@@ -8,26 +8,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/mux"
 )
-
-var DB dbwork.DataBase
-
-func StartDB() error {
-	var err error
-
-	DB, err = dbwork.InitializationDB()
-	if err != nil {
-		return err
-	}
-
-	DB.Run()
-	return nil
-}
 
 // Стандартная ошибка API
 // swagger:model
@@ -76,7 +60,7 @@ func CreateArticle(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan error, 1)
-	DB.CreateArticle(login, article.Text, ch)
+	dbwork.DB.CreateArticle(login, article.Text, ch)
 	err = <-ch
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -118,7 +102,7 @@ func DeleteArticle(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, err = DB.VerifyArticleToUser(id, login)
+	ok, err = dbwork.DB.VerifyArticleToUser(id, login)
 	if err != nil {
 		models.ResponseErrorServer(rw)
 		return
@@ -130,7 +114,7 @@ func DeleteArticle(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan error, 1)
-	DB.DeleteArticle(id, ch)
+	dbwork.DB.DeleteArticle(id, ch)
 	err = <-ch
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -189,7 +173,7 @@ func Register(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan error, 1)
-	DB.CreateUser(user.Login, user.Password, ch)
+	dbwork.DB.CreateUser(user.Login, user.Password, ch)
 	err = <-ch
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -221,7 +205,7 @@ func GetArticle(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	articles, err := DB.GetArticle(id)
+	articles, err := dbwork.DB.GetArticle(id)
 	if err != nil {
 		models.ResponseErrorServer(rw)
 		return
@@ -250,7 +234,7 @@ type ArticleResponse struct {
 //	200: articlesResponse
 //	500: Response
 func GetAllArticle(rw http.ResponseWriter, r *http.Request) {
-	article, err := DB.GetAllArticle()
+	article, err := dbwork.DB.GetAllArticle()
 	if err != nil {
 		models.ResponseNotFound(rw)
 		return
@@ -311,7 +295,7 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, err = DB.VerifyArticleToUser(article.ID, login)
+	ok, err = dbwork.DB.VerifyArticleToUser(article.ID, login)
 	if err != nil {
 		models.ResponseErrorServer(rw)
 		return
@@ -323,7 +307,7 @@ func UpdateArticle(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan error, 1)
-	DB.UpdateArticle(article.ID, article.Text, ch)
+	dbwork.DB.UpdateArticle(article.ID, article.Text, ch)
 	err = <-ch
 	if err != nil {
 		models.ResponseErrorServer(rw)
@@ -363,23 +347,14 @@ func LoginHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	verify, err := DB.VerifyPassword(loginRequest.Login, loginRequest.Password)
+	verify, err := dbwork.DB.VerifyPassword(loginRequest.Login, loginRequest.Password)
 	if err != nil || !verify {
 		models.ResponseNew(rw, "Не верны пароль или логин", http.StatusUnauthorized)
 		return
 	}
 
-	configFile, _ := os.ReadFile("JWTSecret.json")
-	var config struct {
-		JWTSecret          string `json:"jwt_secret"`
-		JWTExpirationHours int    `json:"jwt_expiration_hours"`
-	}
-	json.Unmarshal(configFile, &config)
-
 	token, err := auth.GenerateJWT(
 		loginRequest.Login,
-		config.JWTSecret,
-		time.Duration(config.JWTExpirationHours)*time.Hour,
 	)
 	if err != nil {
 		models.ResponseErrorServer(rw)
